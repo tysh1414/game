@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>阿瓦隆 - 網頁版</title>
+    <style>
+        body { font-family: 'Microsoft JhengHei', sans-serif; background-color: #1a1a1a; color: #e0e0e0; text-align: center; margin: 0; padding: 20px; }
+        h1 { color: #d4af37; text-shadow: 2px 2px 4px #000; margin-top: 0; }
+        .container { position: relative; max-width: 600px; margin: 0 auto; background: #2d2d2d; padding: 20px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        
+        /* 按鈕樣式 */
+        .btn { background-color: #4a69bd; color: white; border: none; padding: 15px 20px; font-size: 16px; margin: 10px 5px; border-radius: 8px; cursor: pointer; width: 80%; max-width: 300px; transition: transform 0.1s; }
+        .btn:active { transform: scale(0.98); }
+        .btn-red { background-color: #e55039; }
+        .btn-green { background-color: #78e08f; color: #1a1a1a; }
+        .btn-gold { background-color: #f0932b; color: #1a1a1a; font-weight: bold; border: 2px solid #d4af37; }
+        
+        /* 重置按鈕 (右上角) */
+        .reset-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: transparent;
+            border: 1px solid #777;
+            color: #aaa;
+            padding: 5px 10px;
+            font-size: 12px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .reset-btn:hover { background: #444; color: white; border-color: white; }
+
+        .hidden { display: none; }
+        .role-card { border: 2px solid #d4af37; padding: 20px; margin: 20px 0; background: #333; border-radius: 10px; }
+        .info-text { color: #f6b93b; font-weight: bold; }
+        .good { color: #82ccdd; }
+        .evil { color: #ff6b6b; }
+        
+        input[type="text"], input[type="number"] { padding: 10px; font-size: 16px; width: 70%; margin-bottom: 10px; border-radius: 5px; border: 1px solid #555; background: #444; color: white; }
+        
+        .scoreboard { display: flex; justify-content: space-around; margin-bottom: 20px; }
+        .score-box { padding: 10px; border-radius: 5px; width: 40%; font-weight: bold; }
+        .score-blue { background: #0c2461; border: 2px solid #4a69bd; }
+        .score-red { background: #6a040f; border: 2px solid #e55039; }
+        
+        .player-list { text-align: left; padding: 10px; background: #222; margin: 10px 0; border-radius: 5px; max-height: 300px; overflow-y: auto; }
+        .list-item { border-bottom: 1px solid #444; padding: 8px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <button class="reset-btn" onclick="confirmReset()">↻ 重置遊戲</button>
+
+    <h1>⚔️ 阿瓦隆</h1>
+    
+    <div id="setup-phase">
+        <p>請輸入玩家人數 (5-10人)</p>
+        <input type="number" id="num-players" min="5" max="10" value="5">
+        <br>
+        <button class="btn" onclick="initPlayersInput()">下一步：輸入名字</button>
+    </div>
+
+    <div id="names-phase" class="hidden">
+        <div id="name-inputs"></div>
+        <button class="btn" onclick="startGame(false)">開始分配角色</button>
+    </div>
+
+    <div id="reveal-phase" class="hidden">
+        <h2 id="reveal-title">準備查看身分</h2>
+        <p>請將裝置交給 <span id="current-player-name" class="info-text"></span></p>
+        <div id="reveal-card" class="role-card hidden">
+            <h3>你的身分是：</h3>
+            <h2 id="role-name"></h2>
+            <p id="role-info"></p>
+        </div>
+        <button id="reveal-btn" class="btn" onclick="showRole()">👁️ 點擊查看 (確認無旁人)</button>
+        <button id="next-player-btn" class="btn hidden" onclick="nextPlayerReveal()">隱藏並傳給下一位</button>
+    </div>
+
+    <div id="game-phase" class="hidden">
+        <div class="scoreboard">
+            <div class="score-box score-blue">正義方勝: <span id="blue-score">0</span></div>
+            <div class="score-box score-red">邪惡方勝: <span id="red-score">0</span></div>
+        </div>
+        <p>第 <span id="round-num" class="info-text">1</span> 回合 | 需 <span id="mission-req" class="info-text">2</span> 人</p>
+        <p>連續投票失敗: <span id="vote-fails">0</span>/5</p>
+        <hr>
+        <h3>👑 現任領袖：<span id="current-leader" style="color:#d4af37"></span></h3>
+        <p>請領袖與大家討論，並在此操作結果：</p>
+        
+        <div id="action-area">
+            <button class="btn" onclick="showVoting()">進入投票階段</button>
+        </div>
+    </div>
+
+    <div id="voting-phase" class="hidden">
+        <h3>✋ 全員投票</h3>
+        <p>請大家舉手投票表決隊伍。</p>
+        <p>投票結果是？</p>
+        <button class="btn btn-green" onclick="processVote(true)">✅ 通過 (多數贊成)</button>
+        <button class="btn btn-red" onclick="processVote(false)">❌ 否決 (多數反對/平票)</button>
+    </div>
+
+    <div id="mission-phase" class="hidden">
+        <h3>🚀 執行任務</h3>
+        <p>隊伍已派出！請將裝置交給出任務的玩家。</p>
+        <p>當前操作者：<span id="mission-player" class="info-text"></span></p>
+        
+        <div id="mission-actions" class="hidden">
+            <button class="btn btn-green" onclick="submitMissionCard(true)">任務成功</button>
+            <button class="btn btn-red" onclick="submitMissionCard(false)">任務失敗 (僅壞人可選)</button>
+        </div>
+        <button id="mission-start-btn" class="btn" onclick="startMissionAction()">我是本人，開始出牌</button>
+    </div>
+    
+    <div id="result-phase" class="hidden">
+        <h2 id="result-title"></h2>
+        <p id="result-desc"></p>
+        <button class="btn" onclick="nextRound()">進入下一回合</button>
+    </div>
+    
+    <div id="game-over-phase" class="hidden">
+        <h1 id="winner-text"></h1>
+        <p id="end-game-msg" style="white-space: pre-line; font-size: 18px; margin: 20px;"></p>
+        
+        <button id="btn-reveal-all" class="btn btn-gold" onclick="revealAllRoles()">🔓 揭曉所有身分</button>
+        
+        <div id="all-roles-reveal" class="player-list hidden"></div>
+        
+        <div style="margin-top: 30px; border-top: 1px solid #555; padding-top: 10px;">
+            <button class="btn" onclick="startGame(true)">🔄 保留玩家，再來一局</button>
+            <button class="btn btn-red" onclick="location.reload()">🚪 離開 / 重新設定</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // 遊戲變數
+    let players = [];
+    let playerNames = []; // 儲存名字以便重開局
+    let numPlayers = 0;
+    let currentRound = 0; 
+    let blueWins = 0;
+    let redWins = 0;
+    let voteFailCount = 0;
+    let leaderIndex = 0;
+    let missionTempResults = [];
+    let revealIndex = 0;
+    
+    // 配置表 (標準規則)
+    const missionConfig = {
+        5: [2, 3, 2, 3, 3],
+        6: [2, 3, 4, 3, 4],
+        7: [2, 3, 3, 4, 4], // R4需2失敗
+        8: [3, 4, 4, 5, 5],
+        9: [3, 4, 4, 5, 5],
+        10: [3, 4, 4, 5, 5]
+    };
+
+    // 全局重置
+    function confirmReset() {
+        if(confirm("確定要重置遊戲嗎？當前進度將會遺失。")) {
+            location.reload();
+        }
+    }
+
+    // 初始化輸入框
+    function initPlayersInput() {
+        numPlayers = parseInt(document.getElementById("num-players").value);
+        if(numPlayers < 5 || numPlayers > 10) return alert("人數須為 5-10 人");
+        
+        let html = "";
+        for(let i=0; i<numPlayers; i++) {
+            html += `<input type="text" id="pname-${i}" placeholder="玩家 ${i+1} 名稱" value="玩家${i+1}"><br>`;
+        }
+        document.getElementById("name-inputs").innerHTML = html;
+        switchPhase("names-phase");
+    }
+
+    // 開始遊戲 (isRestart: 是否為保留玩家的重開局)
+    function startGame(isRestart) {
+        if (!isRestart) {
+            playerNames = [];
+            for(let i=0; i<numPlayers; i++) {
+                let val = document.getElementById(`pname-${i}`).value;
+                playerNames.push(val || `玩家${i+1}`);
+            }
+        }
+        
+        currentRound = 0;
+        blueWins = 0;
+        redWins = 0;
+        voteFailCount = 0;
+        
+        // 角色分配邏輯 (5-10人)
+        let deck = [];
+        let goodCount = 0;
+        
+        if (numPlayers == 5) { deck = ["梅林", "派西維爾", "忠臣", "刺客", "莫甘娜"]; goodCount = 3; }
+        else if (numPlayers == 6) { deck = ["梅林", "派西維爾", "忠臣", "忠臣", "刺客", "莫甘娜"]; goodCount = 4; }
+        else if (numPlayers == 7) { deck = ["梅林", "派西維爾", "忠臣", "忠臣", "刺客", "莫甘娜", "奧伯倫"]; goodCount = 4; }
+        else {
+             let base = ["梅林", "派西維爾", "刺客", "莫甘娜"];
+             let totalGood = (numPlayers >= 8) ? 5 : (numPlayers >= 9 ? 6 : 6); 
+             if(numPlayers==9) totalGood=6;
+             if(numPlayers==10) totalGood=6;
+             
+             let totalEvil = numPlayers - totalGood;
+             for(let k=0; k < totalGood-2; k++) base.push("忠臣");
+             for(let k=0; k < totalEvil-2; k++) base.push("爪牙");
+             deck = base;
+             if (numPlayers === 10 && deck.includes("爪牙")) {
+                 deck[deck.indexOf("爪牙")] = "奧伯倫";
+             }
+        }
+        
+        deck.sort(() => Math.random() - 0.5);
+        
+        players = [];
+        for(let i=0; i<numPlayers; i++) {
+            players.push({ name: playerNames[i], role: deck[i] });
+        }
+        
+        leaderIndex = Math.floor(Math.random() * numPlayers);
+        revealIndex = 0;
+        switchPhase("reveal-phase");
+        updateRevealUI();
+    }
+
+    // --- UI 切換與邏輯 ---
+
+    function updateRevealUI() {
+        if(revealIndex >= players.length) {
+            switchPhase("game-phase");
+            updateGameUI();
+            return;
+        }
+        document.getElementById("current-player-name").innerText = players[revealIndex].name;
+        document.getElementById("reveal-card").classList.add("hidden");
+        document.getElementById("reveal-btn").classList.remove("hidden");
+        document.getElementById("next-player-btn").classList.add("hidden");
+    }
+
+    function showRole() {
+        const p = players[revealIndex];
+        document.getElementById("role-name").innerText = p.role;
+        
+        const evilRoles = ["刺客", "莫甘娜", "爪牙", "莫德雷德", "奧伯倫"];
+        const isEvilFaction = evilRoles.includes(p.role);
+        
+        let info = "";
+        
+        if (p.role === "梅林") {
+            let evils = players.filter(x => evilRoles.includes(x.role) && x.role !== "莫德雷德").map(x => x.name);
+            info = "你看見的壞人有： " + evils.join(", ");
+            
+        } else if (p.role === "派西維爾") {
+            let targets = players.filter(x => ["梅林", "莫甘娜"].includes(x.role)).map(x => x.name);
+            info = "你看見的梅林與莫甘娜是： " + targets.join(", ");
+            
+        } else if (p.role === "奧伯倫") {
+            info = "你是邪惡方，你不知道其他邪惡方有誰，他們也不知道你，你是孤兒。";
+            
+        } else if (isEvilFaction) {
+            let teammates = players.filter(x => evilRoles.includes(x.role) && x.role !== "奧伯倫" && x.name !== p.name).map(x => x.name);
+            info = "你的邪惡隊友是： " + teammates.join(", ");
+            
+        } else {
+            info = "你是正義的夥伴，請睜大眼睛尋找真相。";
+        }
+        
+        document.getElementById("role-info").innerText = info;
+        
+        const title = document.getElementById("role-name");
+        if(isEvilFaction) {
+            title.className = "evil";
+        } else {
+            title.className = "good";
+        }
+
+        document.getElementById("reveal-card").classList.remove("hidden");
+        document.getElementById("reveal-btn").classList.add("hidden");
+        document.getElementById("next-player-btn").classList.remove("hidden");
+    }
+
+    function nextPlayerReveal() {
+        revealIndex++;
+        updateRevealUI();
+    }
+
+    function updateGameUI() {
+        document.getElementById("blue-score").innerText = blueWins;
+        document.getElementById("red-score").innerText = redWins;
+        document.getElementById("round-num").innerText = currentRound + 1;
+        document.getElementById("mission-req").innerText = missionConfig[players.length][currentRound];
+        document.getElementById("vote-fails").innerText = voteFailCount;
+        document.getElementById("current-leader").innerText = players[leaderIndex].name;
+    }
+
+    function switchPhase(id) {
+        const phases = ["setup-phase", "names-phase", "reveal-phase", "game-phase", "voting-phase", "mission-phase", "result-phase", "game-over-phase"];
+        phases.forEach(p => document.getElementById(p).classList.add("hidden"));
+        document.getElementById(id).classList.remove("hidden");
+    }
+
+    function showVoting() {
+        switchPhase("voting-phase");
+    }
+
+    function processVote(isPass) {
+        if (isPass) {
+            alert("✅ 提議通過！準備出任務！");
+            voteFailCount = 0;
+            startMissionPhase();
+        } else {
+            alert("❌ 提議被否決！");
+            voteFailCount++;
+            leaderIndex = (leaderIndex + 1) % players.length;
+            
+            if(voteFailCount >= 5) {
+                endGame("evil_vote", "連續 5 次提議失敗。");
+            } else {
+                switchPhase("game-phase");
+                updateGameUI();
+            }
+        }
+    }
+
+    let missionMembersCount = 0;
+    let currentMissionMemberIndex = 0;
+
+    function startMissionPhase() {
+        missionMembersCount = missionConfig[players.length][currentRound];
+        missionTempResults = [];
+        currentMissionMemberIndex = 0;
+        updateMissionUI();
+        switchPhase("mission-phase");
+    }
+
+    function updateMissionUI() {
+        if(currentMissionMemberIndex < missionMembersCount) {
+            document.getElementById("mission-player").innerText = `第 ${currentMissionMemberIndex + 1} 位隊員`;
+            document.getElementById("mission-actions").classList.add("hidden");
+            document.getElementById("mission-start-btn").classList.remove("hidden");
+        } else {
+            calcMissionResult();
+        }
+    }
+
+    function startMissionAction() {
+        document.getElementById("mission-start-btn").classList.add("hidden");
+        document.getElementById("mission-actions").classList.remove("hidden");
+    }
+
+    function submitMissionCard(isSuccess) {
+        missionTempResults.push(isSuccess);
+        currentMissionMemberIndex++;
+        alert("卡片已送出！請交給下一位（或交回給主持人）。");
+        updateMissionUI();
+    }
+
+    function calcMissionResult() {
+        let fails = missionTempResults.filter(x => x === false).length;
+        let isFail = false;
+        
+        // 7人以上第4局需2張 (index 3)
+        if(players.length >= 7 && currentRound === 3) {
+            isFail = fails >= 2;
+        } else {
+            isFail = fails >= 1;
+        }
+
+        let title = isFail ? "❌ 任務失敗！" : "🎉 任務成功！";
+        let desc = isFail ? `出現了 ${fails} 張失敗卡！` : "所有人都執行了任務成功。";
+        
+        if(isFail) redWins++; else blueWins++;
+
+        document.getElementById("result-title").innerText = title;
+        document.getElementById("result-desc").innerText = desc;
+        switchPhase("result-phase");
+    }
+
+    function nextRound() {
+        if (blueWins >= 3) {
+            endGame("assassin", "正義方完成了 3 個任務！");
+        } else if (redWins >= 3) {
+            endGame("evil_mission", "邪惡方使 3 個任務失敗。");
+        } else {
+            currentRound++;
+            leaderIndex = (leaderIndex + 1) % players.length;
+            switchPhase("game-phase");
+            updateGameUI();
+        }
+    }
+
+    // 改寫結束邏輯
+    function endGame(type, reason) {
+        switchPhase("game-over-phase");
+        const h1 = document.getElementById("winner-text");
+        const msgP = document.getElementById("end-game-msg");
+        
+        // 重置揭曉區塊
+        document.getElementById("all-roles-reveal").innerHTML = "";
+        document.getElementById("all-roles-reveal").classList.add("hidden");
+        document.getElementById("btn-reveal-all").classList.remove("hidden");
+
+        if (type === "assassin") {
+            // 正義方 3勝 -> 刺殺階段
+            h1.innerText = "⚔️ 進入刺殺梅林階段";
+            h1.style.color = "#d4af37"; // 金色
+            msgP.innerText = reason + "\n\n請刺客公開身分，並與邪惡方討論。\n若刺客指認出梅林，邪惡方反敗為勝！\n\n(討論完畢後，請點擊下方按鈕揭曉身分)";
+        } else {
+            // 邪惡方獲勝
+            h1.innerText = "🔴 邪惡方獲勝";
+            h1.style.color = "#e55039";
+            msgP.innerText = reason;
+        }
+    }
+
+    // 揭曉身分函式
+    function revealAllRoles() {
+        let html = `<h3>身分揭曉</h3>`;
+        players.forEach(p => {
+            const evilRoles = ["刺客", "莫甘娜", "爪牙", "莫德雷德", "奧伯倫"];
+            let color = evilRoles.includes(p.role) ? "#ff6b6b" : "#82ccdd";
+            html += `<div class="list-item">${p.name} - <span style="color:${color}">${p.role}</span></div>`;
+        });
+        
+        const listDiv = document.getElementById("all-roles-reveal");
+        listDiv.innerHTML = html;
+        listDiv.classList.remove("hidden");
+        
+        // 隱藏揭曉按鈕
+        document.getElementById("btn-reveal-all").classList.add("hidden");
+    }
+</script>
+
+</body>
+</html>
